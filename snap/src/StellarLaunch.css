@@ -1,0 +1,216 @@
+/* StellarLaunch.css - COMPLETE VERSION */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #010002;
+    font-family: 'Inter', sans-serif;
+}
+#canvas-container {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    position: relative;
+}
+#video {
+    display: none; 
+}
+#hand-canvas {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 200px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    z-index: 200;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: box-shadow 0.4s ease, border-color 0.4s ease;
+    transform: scaleX(-1); /* Flip horizontally to act as a mirror */
+}
+#hand-canvas.active {
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+.ui-panel {
+    position: absolute;
+    color: #ffffff;
+    z-index: 100;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px 20px;
+    border-radius: 12px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+#info {
+    top: 20px;
+    left: 20px;
+}
+#info h3 {
+    margin: 0 0 10px 0;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 8px;
+}
+.gesture-hint {
+    margin: 8px 0;
+    opacity: 0.9;
+    font-size: 14px;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
+}
+.gesture-hint kbd {
+    display: inline-block;
+    padding: 3px 6px;
+    font-family: 'Inter', sans-serif;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 13px;
+    margin-right: 8px;
+}
+#gesture-status {
+    bottom: 25px;
+    left: 50%;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff;
+    padding: 12px 25px;
+    border-radius: 50px;
+    opacity: 0;
+    transform: translate(-50%, 20px);
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+#gesture-status.visible {
+    opacity: 1;
+    transform: translateX(-50%);
+}
+
+
+@media (max-width: 768px) {
+    #info {
+        top: auto;
+        bottom: 20px;
+        left: 20px;
+        max-width: calc(100% - 100px); 
+    }
+     #hand-canvas {
+        width: 120px;
+        height: 90px;
+     }
+}
+
+/* --- Countdown Overlay Styles --- */
+.countdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.5s ease;
+}
+
+.countdown-circle {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.countdown-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 200px;
+  transform: rotate(-90deg);
+}
+
+.countdown-ring-bg {
+  fill: none;
+  stroke: rgba(0, 245, 255, 0.2);
+  stroke-width: 8;
+}
+
+.countdown-ring {
+  fill: none;
+  stroke: #00F5FF;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 565.48;
+  stroke-dashoffset: 565.48; /* Start at 0 */
+  transition: stroke-dashoffset 1s linear;
+  filter: drop-shadow(0 0 10px #00F5FF) drop-shadow(0 0 20px #00F5FF);
+}
+
+.countdown-number {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 72px;
+  font-weight: bold;
+  color: #00F5FF;
+  text-shadow: 0 0 20px #00F5FF, 0 0 40px #00F5FF, 0 0 60px #00F5FF;
+  animation: pulse 1s ease infinite;
+}
+
+.countdown-text {
+  margin-top: 40px;
+  font-size: 24px;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    transform: translate(-50%, -50%) scale(1); 
+    opacity: 1;
+  }
+  50% { 
+    transform: translate(-50%, -50%) scale(1.1); 
+    opacity: 0.8;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhance countdown status */
+.ui-panel.countdown {
+  /* This style from your code was overriding the main countdown text */
+  /* I've removed it so the new overlay shows correctly */
+  display: none;
+}
