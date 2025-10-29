@@ -3,6 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import StellarFlare from "./components/StellarFlare";
 import HandTracking from "./components/HandTracking";
 import UIOverlay from "./components/UIOverlay";
+import AdminDashboard from "./components/AdminDashboard";
 import "./App.css";
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
       </Canvas>
       <HandTracking />
       <UIOverlay />
+      <AdminDashboard />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:3001"; 
+const SOCKET_URL = "https://launch-production-4d52.up.railway.app/"; 
 export function useWebSocket() {
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
