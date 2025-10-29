@@ -6,6 +6,11 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
+
+app.get("/", (req, res) => {
+  res.send("✅ WebSocket server is running!");
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
