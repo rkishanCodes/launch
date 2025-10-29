@@ -6,6 +6,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass";
 import { AfterimagePass } from "three/examples/jsm/postprocessing/AfterimagePass";
 
+
 const palette = {
   color1: new THREE.Color(0x21094e),
   color2: new THREE.Color(0xf9009a),
