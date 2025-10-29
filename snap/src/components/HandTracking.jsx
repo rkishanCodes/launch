@@ -1,11 +1,12 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Hands } from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-import { HAND_CONNECTIONS } from '@mediapipe/hands';
-import { useWebSocket } from '../hooks/useWebSocket';
+import React, { useState, useEffect, useRef } from "react";
+import { Hands } from "@mediapipe/hands";
+import { Camera } from "@mediapipe/camera_utils";
+import { drawConnectors, drawLandmarks } from "@mediapipe/drawing_utils";
+import { HAND_CONNECTIONS } from "@mediapipe/hands";
 
-export default function HandTracking() {
+// Renamed component to 'App' to match the file's default export
+export default function App() {
+  // --- Refs for MediaPipe and Dino ---
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const handsRef = useRef(null);
@@ -16,20 +17,13 @@ export default function HandTracking() {
   const snapCountRef = useRef(0);
   const lastSnapTimeRef = useRef(0);
   const snapStateRef = useRef("open");
+  const ground1Ref = useRef(null);
+  const ground2Ref = useRef(null);
 
-  // WebSocket hook
-  const {
-    isConnected,
-    syncedState,
-    triggerPulse: emitPulse,
-    updatePosition: emitPosition,
-    snapDetected: emitSnap,
-    startCountdown: emitCountdown,
-  } = useWebSocket();
-
+  // --- State for MediaPipe and Dino ---
   const [gestureStatus, setGestureStatus] = useState("");
   const [isActive, setIsActive] = useState(false);
-  const [showCountdown, setShowCountdown] = useState(false);
+  const [showCountdown, setShowCountdown] = useState(false); // This will be triggered by MediaPipe
   const [countdown, setCountdown] = useState(3);
   const [snapCount, setSnapCount] = useState(0);
   const [snapProgress, setSnapProgress] = useState([
@@ -41,40 +35,34 @@ export default function HandTracking() {
   const [launching, setLaunching] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
+  // --- Constants ---
   const gestureDebounce = 500;
   const snapDebounce = 300;
   const snapResetTime = 3000;
 
-  // Sync countdown from WebSocket
-  // Replace your existing countdown sync useEffect with this:
-
-  useEffect(() => {
-    // Sync countdown state from server
-    if (syncedState.countdownActive && !showCountdown) {
-      // Start countdown
-      setShowCountdown(true);
-      setCountdown(3);
-    } else if (!syncedState.countdownActive && showCountdown) {
-      // Reset received from server - clear countdown
-      console.log("🔄 Countdown cleared by server");
-      setShowCountdown(false);
-      setCountdown(3);
-      setLaunching(false);
+  // --- Helper functions for dino ground animation ---
+  const setCustomProperty = (elem, prop, value) => {
+    if (elem) {
+      elem.style.setProperty(prop, value);
     }
-  }, [syncedState.countdownActive, showCountdown]);
+  };
 
-  // Sync snap count from WebSocket
-  useEffect(() => {
-    if (syncedState.snapCount !== snapCount) {
-      setSnapCount(syncedState.snapCount);
-      const newProgress = [false, false, false, false];
-      for (let i = 0; i < Math.min(syncedState.snapCount, 4); i++) {
-        newProgress[i] = true;
-      }
-      setSnapProgress(newProgress);
+  const getCustomProperty = (elem, prop) => {
+    if (elem) {
+      return parseFloat(getComputedStyle(elem).getPropertyValue(prop)) || 0;
     }
-  }, [syncedState.snapCount]);
+    return 0;
+  };
 
+  const incrementCustomProperty = (elem, prop, inc) => {
+    if (elem) {
+      setCustomProperty(elem, prop, getCustomProperty(elem, prop) + inc + "px");
+    }
+  };
+
+  // --- WebSocket code removed as the import is not available ---
+
+  // --- MediaPipe Initialization ---
   useEffect(() => {
     const initMediaPipe = async () => {
       try {
@@ -153,19 +141,55 @@ export default function HandTracking() {
     };
   }, []);
 
+  // --- Countdown Logic ---
   useEffect(() => {
     if (showCountdown && countdown > 0) {
       const timer = setTimeout(() => {
         setCountdown(countdown - 1);
       }, 1000);
       return () => clearTimeout(timer);
-    } else if (showCountdown && countdown === 0) {
+    } else if (showCountdown && countdown === 0 && !launching) {
+      // Added !launching check to prevent multiple triggers
       setLaunching(true);
       setTimeout(() => {
+        // Redirecting to CAIAS as in the original logic
         window.location.href = "https://caias.in";
       }, 2500);
     }
-  }, [showCountdown, countdown]);
+  }, [showCountdown, countdown, launching]);
+
+  // --- Dino Ground Animation Logic ---
+  useEffect(() => {
+    if (!showCountdown) return; // Only run if overlay is visible
+
+    const groundElems = [ground1Ref.current, ground2Ref.current];
+    if (!groundElems[0] || !groundElems[1]) {
+      // Refs might not be ready on first render
+      return;
+    }
+
+    // Initial setup from original moveGround
+    setCustomProperty(
+      groundElems[1],
+      "--right",
+      (groundElems[1].width || 600) * -1 + "px"
+    );
+
+    const interval = setInterval(() => {
+      groundElems.forEach((ground) => {
+        if (!ground) return;
+        const groundWidth = ground.width || 600; // Fallback width
+        incrementCustomProperty(ground, "--right", 1);
+        if (getCustomProperty(ground, "--right") >= groundWidth) {
+          incrementCustomProperty(ground, "--right", -groundWidth * 2);
+        }
+      });
+    }, 5);
+
+    return () => clearInterval(interval); // Cleanup interval on unmount
+  }, [showCountdown]); // Rerun when overlay appears
+
+  // --- MediaPipe Hand Tracking Functions ---
 
   const detectSnap = (landmarks) => {
     const thumbTip = landmarks[4];
@@ -197,9 +221,6 @@ export default function HandTracking() {
 
         const newCount = snapCountRef.current;
 
-        // Emit to WebSocket server
-        emitSnap(newCount);
-
         setSnapCount(newCount);
 
         const newProgress = [false, false, false, false];
@@ -209,8 +230,7 @@ export default function HandTracking() {
         setSnapProgress(newProgress);
 
         if (newCount >= 4) {
-          // Emit countdown start to all devices
-          emitCountdown();
+          // Trigger the countdown locally
           setShowCountdown(true);
           setCountdown(3);
           snapCountRef.current = 0;
@@ -276,9 +296,7 @@ export default function HandTracking() {
       if (isFistDetected) {
         const currentTime = Date.now();
         if (currentTime - lastGestureTimeRef.current > gestureDebounce) {
-          // Emit pulse to WebSocket
-          emitPulse();
-
+          // Removed WebSocket emitPulse
           if (window.triggerPulse) {
             window.triggerPulse();
           }
@@ -356,9 +374,7 @@ export default function HandTracking() {
       if (Math.abs(deltaX) > 0.001 || Math.abs(deltaY) > 0.001) {
         isManualRotatingRef.current = true;
 
-        // Emit position update to WebSocket
-        emitPosition(deltaX * moveSensitivity, -deltaY * moveSensitivity);
-
+        // Removed WebSocket emitPosition
         if (window.setStarPosition) {
           window.setStarPosition(
             deltaX * moveSensitivity,
@@ -382,28 +398,7 @@ export default function HandTracking() {
 
   return (
     <>
-      {/* WebSocket Connection Status */}
-      <div
-        style={{
-          position: "absolute",
-          top: "220px",
-          right: "20px",
-          padding: "8px 12px",
-          background: isConnected
-            ? "rgba(0, 255, 0, 0.15)"
-            : "rgba(255, 0, 0, 0.15)",
-          border: `1px solid ${
-            isConnected ? "rgba(0, 255, 0, 0.4)" : "rgba(255, 0, 0, 0.4)"
-          }`,
-          borderRadius: "8px",
-          color: isConnected ? "#00ff00" : "#ff0000",
-          fontSize: "12px",
-          zIndex: 201,
-          fontWeight: "bold",
-        }}
-      >
-        ● {isConnected ? "SYNCED" : "OFFLINE"}
-      </div>
+      {/* WebSocket Connection Status (REMOVED) */}
 
       <video
         ref={videoRef}
@@ -440,6 +435,26 @@ export default function HandTracking() {
           transition: "box-shadow 0.4s ease, border-color 0.4s ease",
         }}
       />
+
+      {/* Camera Error Message */}
+      {cameraError && (
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(255, 0, 0, 0.8)",
+            color: "white",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            zIndex: 10000,
+            textAlign: "center",
+          }}
+        >
+          {cameraError}
+        </div>
+      )}
 
       {/* Snap Progress Indicator */}
       <div
@@ -525,326 +540,172 @@ export default function HandTracking() {
               ? "radial-gradient(circle at center, #1a0033 0%, #000000 100%)"
               : "radial-gradient(circle at bottom, #1a0033 0%, #000000 100%)",
             zIndex: 9999,
-            animation: "fadeIn 0.3s ease-in-out",
+            animation: "fadeInOverlay 0.3s ease-in-out",
             overflow: "hidden",
+            color: "white", // Default text color for overlay
           }}
         >
-          {/* Animated Stars */}
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="star"
-              style={{
-                position: "absolute",
-                width: "2px",
-                height: "2px",
-                background: "white",
-                borderRadius: "50%",
-                top: `${Math.random() * 100}%`,
-                left: `${Math.random() * 100}%`,
-                animation: `twinkle ${
-                  2 + Math.random() * 3
-                }s infinite ease-in-out ${Math.random() * 2}s`,
-              }}
+          {/* --- Dino Animation --- */}
+          <div className="world">
+            <img
+              className="dino"
+              src="https://i.imgur.com/Zvm9K3m.png"
+              alt="Dino"
             />
-          ))}
-
-          {/* Rocket Container */}
-          <div
-            className="rocket-container"
-            style={{
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              animation: launching
-                ? "liftoff 2.5s cubic-bezier(0.75, 0, 0.25, 1) forwards"
-                : "none",
-            }}
-          >
-            {/* Smoke/Exhaust Trail */}
-            {launching && (
-              <>
-                <div className="smoke smoke1" />
-                <div className="smoke smoke2" />
-                <div className="smoke smoke3" />
-                <div className="flame flame1" />
-                <div className="flame flame2" />
-              </>
-            )}
-
-            {/* Rocket Emoji/Icon */}
-            <div
-              className="rocket"
-              style={{
-                fontSize: launching ? "120px" : "100px",
-                filter: launching
-                  ? "drop-shadow(0 0 40px #F9009A) drop-shadow(0 0 80px #00F5FF)"
-                  : "none",
-                transition: "all 0.5s ease",
-                animation: launching
-                  ? "rocketShake 0.1s infinite"
-                  : "rocketFloat 2s ease-in-out infinite",
-                position: "relative",
-                zIndex: 10,
-              }}
-            >
-              🚀
+            <img
+              className="cactus"
+              src="https://i.imgur.com/iTDwHri.png"
+              alt="Cactus"
+            />
+            <img
+              className="cactus hide"
+              src="https://i.imgur.com/iTDwHri.png"
+              alt="Cactus"
+            />
+            <div className="ground-container">
+              <img
+                ref={ground1Ref}
+                className="ground"
+                src="https://i.imgur.com/vj58SOA.png"
+                alt="Ground"
+              />
+              <img
+                ref={ground2Ref}
+                className="ground"
+                src="https://i.imgur.com/vj58SOA.png"
+                alt="Ground"
+              />
             </div>
+          </div>
+          {/* --- End Dino Animation --- */}
 
-            {/* Countdown Number */}
-            {!launching && countdown > 0 && (
-              <div
-                style={{
-                  fontSize: "180px",
-                  fontWeight: "bold",
-                  background: "linear-gradient(135deg, #F9009A, #00F5FF)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  animation: "countdownPulse 1s ease-in-out",
-                  textShadow: "0 0 60px rgba(249, 0, 154, 0.8)",
-                  marginTop: "30px",
-                  position: "relative",
-                }}
-              >
-                {countdown}
-              </div>
-            )}
+          {/* Apple-style Countdown Number */}
+          {!launching && countdown > 0 && (
+            <div key={countdown} className="apple-countdown">
+              {countdown}
+            </div>
+          )}
 
-            {/* Launch Message */}
-            {launching && (
-              <div
-                style={{
-                  fontSize: "48px",
-                  fontWeight: "bold",
-                  background:
-                    "linear-gradient(135deg, #FFD700, #FFA500, #FF6B6B)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  animation: "pulse 1s ease-in-out infinite",
-                  marginTop: "40px",
-                  letterSpacing: "4px",
-                  textTransform: "uppercase",
-                }}
-              >
-                Lift Off!
-              </div>
-            )}
-
-            {/* Status Message */}
-            {!launching && (
-              <div
-                style={{
-                  fontSize: "32px",
-                  marginTop: "40px",
-                  opacity: 0.9,
-                  letterSpacing: "3px",
-                  textTransform: "uppercase",
-                  fontWeight: "600",
-                  background: "linear-gradient(135deg, #ffffff, #00F5FF)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  animation: "fadeInUp 0.5s ease-out",
-                }}
-              >
-                Preparing Launch...
-              </div>
-            )}
-
-            {/* Progress Bar */}
-            {!launching && (
-              <div
-                style={{
-                  width: "500px",
-                  height: "8px",
-                  background: "rgba(255, 255, 255, 0.15)",
-                  borderRadius: "4px",
-                  marginTop: "50px",
-                  overflow: "hidden",
-                  position: "relative",
-                  boxShadow: "0 0 20px rgba(0, 245, 255, 0.3)",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    background:
-                      "linear-gradient(90deg, #F9009A, #FF6B6B, #00F5FF)",
-                    borderRadius: "4px",
-                    width: `${((3 - countdown) / 3) * 100}%`,
-                    transition: "width 1s linear",
-                    boxShadow: "0 0 20px rgba(0, 245, 255, 0.8)",
-                    animation: "shimmer 2s infinite",
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Particle Burst on Launch */}
-            {launching && (
-              <>
-                {[...Array(30)].map((_, i) => (
-                  <div
-                    key={`particle-${i}`}
-                    className="particle"
-                    style={{
-                      position: "absolute",
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: `hsl(${Math.random() * 60 + 330}, 100%, 60%)`,
-                      bottom: "80px",
-                      left: "50%",
-                      animation: `explode ${
-                        0.8 + Math.random() * 0.4
-                      }s ease-out forwards`,
-                      animationDelay: `${Math.random() * 0.2}s`,
-                      transform: `rotate(${i * 12}deg)`,
-                    }}
-                  />
-                ))}
-              </>
-            )}
+          {/* Dynamic Fun Status Messages */}
+          <div className="status-message">
+            {launching
+              ? "🚀 Blasting Off to CAIAS..."
+              : countdown === 3
+              ? "🎉 New Website Ready for Launch!"
+              : countdown === 2
+              ? "✨ Polishing the Pixels..."
+              : countdown === 1
+              ? "🎯 Get Ready for Awesomeness!"
+              : "Initializing Experience..."}
           </div>
 
-          {/* Sub-message */}
-          <div
-            style={{
-              fontSize: "18px",
-              marginTop: "60px",
-              opacity: 0.6,
-              letterSpacing: "2px",
-              color: "#ffffff",
-              animation: "fadeIn 1s ease-in",
-            }}
-          >
-            {launching ? "Redirecting to CAIAS..." : "Get ready for takeoff!"}
-          </div>
+          {/* Minimal Status Message */}
+          {/* <div className="status-message">
+            {launching ? "Redirecting to CAIAS..." : "Preparing Launch..."}
+          </div> */}
         </div>
       )}
 
       <style>
         {`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
+          /* --- Minimal Overlay Style --- */
+          @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          
+          /* --- Apple-style Counter --- */
+          .apple-countdown {
+            font-size: 160px;
+            font-weight: 200;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            animation: applePulse 1s ease-in-out;
+            position: relative;
+            margin-top: 20px;
           }
 
-          @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
-          @keyframes countdownPulse {
-            0% { transform: scale(0.8); opacity: 0.3; }
-            50% { transform: scale(1.2); opacity: 1; }
+          @keyframes applePulse {
+            0% { transform: scale(0.9); opacity: 0; }
+            50% { transform: scale(1.05); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
           }
 
-          @keyframes rocketFloat {
-            0%, 100% { transform: translateY(0px) rotate(-5deg); }
-            50% { transform: translateY(-15px) rotate(-8deg); }
-          }
-
-          @keyframes rocketShake {
-            0%, 100% { transform: translateX(0) rotate(-5deg); }
-            25% { transform: translateX(-3px) rotate(-7deg); }
-            75% { transform: translateX(3px) rotate(-3deg); }
-          }
-
-          @keyframes liftoff {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            60% { transform: translateY(-50vh) scale(1.2); opacity: 1; }
-            100% { transform: translateY(-120vh) scale(0.5); opacity: 0; }
-          }
-
-          @keyframes twinkle {
-            0%, 100% { opacity: 0.2; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.3); }
-          }
-
-          @keyframes shimmer {
-            0% { background-position: -500px 0; }
-            100% { background-position: 500px 0; }
-          }
-
-          @keyframes explode {
-            0% {
-              transform: translate(0, 0) rotate(var(--angle)) scale(1);
-              opacity: 1;
+          /* --- Minimal Status Message --- */
+        .status-message {
+              font-size: 28px;
+              font-weight: 500;
+              color: rgba(255, 255, 255, 0.95);
+              margin-top: 30px;
+              position: relative;
+              letter-spacing: 1px;
+              animation: slideInUp 0.6s ease-out;
+              text-shadow: 0 2px 20px rgba(255, 255, 255, 0.3);
             }
-            100% {
-              transform: translate(
-                calc(cos(var(--angle)) * 200px), 
-                calc(sin(var(--angle)) * 200px)
-              ) rotate(var(--angle)) scale(0);
-              opacity: 0;
+
+          /* --- Dino Animation Styles --- */
+          .world {
+            width: 450px;
+            height: 200px; 
+            position: relative;
+            overflow: hidden;
+            padding-top: 80px; /* <-- ADD THIS LINE */
+          }
+          .dino, .cactus {
+            height: 50px;
+            margin-bottom: -25px;
+          }
+          .dino {
+            animation: walk .25s infinite, 
+                       jump 2.4s 2s infinite;
+          }
+          .cactus {
+            position: absolute;
+            animation: 2.4s cactus infinite linear;
+          }
+          .hide {
+            display: none;
+          }
+          .ground-container {
+            display: flex;
+          }
+          .ground {
+            --right: 0px;
+            position: absolute;
+            transform: translateX(calc(var(--right)*-1));
+            /* Ensure ground image displays correctly */
+            width: 600px; 
+            height: auto;
+          }
+          
+          @keyframes walk {
+            0%, 100% {
+              content: url(https://i.imgur.com/evf6C9r.png);
+            }
+            50% {
+              content: url(https://i.imgur.com/1r7Qtm2.png);
             }
           }
-
-          @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.05); }
+          
+          @keyframes jump {
+              0%, 30% {
+                  transform: translateY(0);
+              }
+              15% {
+                  transform: translateY(-75px);
+              }
           }
-
-          .smoke {
-            position: absolute;
-            bottom: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60px;
-            height: 60px;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.4), transparent 70%);
-            border-radius: 50%;
-            animation: smokePuff 0.6s ease-out infinite;
-            z-index: 1;
-          }
-
-          .smoke1 { animation-delay: 0s; }
-          .smoke2 { animation-delay: 0.2s; opacity: 0.7; }
-          .smoke3 { animation-delay: 0.4s; opacity: 0.5; }
-
-          @keyframes smokePuff {
-            0% { opacity: 0.6; transform: translateX(-50%) translateY(0) scale(0.8); }
-            100% { opacity: 0; transform: translateX(-50%) translateY(80px) scale(2); }
-          }
-
-          .flame {
-            position: absolute;
-            bottom: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 40px;
-            height: 80px;
-            background: linear-gradient(to top, #FF6B6B, #FFA500, #FFD700);
-            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-            animation: flicker 0.1s infinite alternate;
-            z-index: 2;
-            filter: blur(4px);
-          }
-
-          .flame1 { animation-delay: 0s; }
-          .flame2 { animation-delay: 0.05s; opacity: 0.8; transform: translateX(-50%) scale(0.9); }
-
-          @keyframes flicker {
-            0% { transform: translateX(-50%) scaleY(1); opacity: 1; }
-            100% { transform: translateX(-50%) scaleY(1.1); opacity: 0.9; }
-          }
-
-          @media (max-width: 768px) {
-            .rocket { font-size: 80px !important; }
-            .countdown-overlay > div > div:first-of-type { font-size: 120px !important; }
+          
+          @keyframes cactus {
+              from {
+                  right: -30px;
+              }
+              to {
+                  right: 100%;
+              }
           }
         `}
       </style>
     </>
   );
 }
-
-
-
-
-
